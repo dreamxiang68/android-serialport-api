@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdkVersion 28
+
+    defaultConfig {
+        minSdkVersion 19
+        targetSdkVersion 28
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // 设置支持的so库架构
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            moduleName "dcm"
+        }
+
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path file('src/main/jni/Android.mk')
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir 'libs'
+            jni.srcDirs = []
+        }
+    }
+
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+
+task ndkBuild(type: Exec, description: 'Compile JNI source via NDK') {
+    Properties properties = new Properties()
+    properties.load(project.rootProject.file('local.properties').newDataInputStream())
+    def ndkDir = properties.getProperty('ndk.dir')
+    commandLine "$ndkDir/ndk-build.cmd",
+            "NDK_PROJECT_PATH=$projectDir.absolutePath/build",
+            "APP_BUILD_SCRIPT=$projectDir.absolutePath/src/main/jni/Android.mk",
+            "NDK_APPLICATION_MK=$projectDir.absolutePath/src/main/jni/Application.mk"
+}
+
+// copy so库到指定的目录
+task makeSo(type: Copy, dependsOn: 'ndkBuild', description: 'copy the native libs to jniLibs') {
+    from fileTree(dir: file(buildDir.absolutePath + '/libs'), include: '**/*.so')
+    into file('build/outputs/libs')
+}
+
+task clearJar(type: Delete) {
+    delete 'build/outputs/libs'
+}
+
+task makeJar(type: Copy) {
+    from('build/intermediates/aar_main_jar/release/')
+    into('build/outputs/libs')
+    include('classes.jar')
+    rename ('classes.jar', 'serial_port.jar')
+}
+
+makeJar.dependsOn(clearJar, build)
